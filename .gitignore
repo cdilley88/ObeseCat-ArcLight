@@ -1,0 +1,30 @@
+# Godot editor and import cache
+.godot/
+.import/
+.mono/
+data_*/
+mono_crash.*.json
+*.translation
+
+# Local export settings and credentials
+export.cfg
+export_credentials.cfg
+
+# Generated playable exports. Build these locally or publish through the release workflow.
+builds/
+
+# Generated validation material: screenshots, logs, hashes, temporary migration scripts.
+artifacts/
+
+# Codex temporary uploaded-file staging; copy intentional assets into prototype/assets/ instead.
+.codex-remote-attachments/
+
+# OS/editor noise
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.tmp
+*.bak
+*.swp
+# Legacy Godot import metadata (regenerated locally)
+*.import
