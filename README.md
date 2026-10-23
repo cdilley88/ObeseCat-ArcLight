@@ -1,14 +1,14 @@
 # ObeseCat ArcLight
 
-Project started September 17, 2026. **TECH DEMO 0.14 is implemented** in Godot 4.7.2 / GDScript for local Windows play. A game in the ObeseCat universe. Production scope remains open.
+Project started September 17, 2026. **TECH DEMO 0.15 is implemented** in Godot 4.7.2 / GDScript for local Windows play. A game in the ObeseCat universe. Production scope remains open.
 
-**0.14 affinity equipment:** 13 Draconic and 6 Visceral bases, matching-affinity enemy drops, neutral chest pools and elemental attack colors. Garage DEV grants each family for inspection. [Rules and art scope](docs/AFFINITY_ITEMS.md).
+**0.15 Opening FMV & ArcLight Title Screen:** Authentic PS1-era opening sequence with the developer splash video ("IntegralTec Studios Presents", skip with any key/click), dedicated Title Screen showcasing original vector ArcLight insignia over a live 3D garage diorama with CRT scanlines, live Continue badge from disk save (`user://arclight_save.json`), New Sortie with overwrite guard, System Options (CRT/Audio toggles, Seed controls, replay FMV), Mission Intel & Credits, and clean desktop quit. In-game System menu (`Esc`) adds Save & Return to Title.
 
-## Play Tech Demo 0.14
+## Play Tech Demo 0.15
 
-Double-click [ObeseCat-ArcLight-0.14.exe](builds/windows/ObeseCat-ArcLight-0.14.exe), or run `./run.ps1` from PowerShell. The standalone executable needs no Godot installation. **Enter** begins in the underground Garage Refuge. Click NPCs to trade or use DEV / DEBUG. Take the Lobby stairs to start climbing. **V** opens the tower route; physical elevators travel to keycard-authorized stops. Defeat floor supervisors to unlock the way up to ObeseCat on floor 19. Three optional side areas branch from the main route.
+Double-click [ObeseCat-ArcLight-0.15.exe](builds/windows/ObeseCat-ArcLight-0.15.exe), or run `./run.ps1` from PowerShell. The standalone executable needs no Godot installation. Press any key or click to skip the developer splash, then select **CONTINUE SORTIE** (or **NEW SORTIE**). Click NPCs to trade or use DEV / DEBUG. Take the Lobby stairs to start climbing. **V** opens the tower route; physical elevators travel to keycard-authorized stops. Defeat floor supervisors to unlock the way up to ObeseCat on floor 19. Three optional side areas branch from the main route.
 
-Click to move/attack; WASD also moves; Space attacks nearby enemies. **I** opens gear, **C** stats, **E** interacts/collects, **Z / X** use Life/Mana potions, **B** opens a Wormhole, **Q** empowers the next hit for 10 Mana, and wheel zooms. **T** recovers to the garage after defeat. **Esc** opens System, including confirmed character reset. To replay with your character intact, choose **NEW SORTIE** from the garage map/elevator. This repopulates floors and clears tower-floor loot while retaining keycards. No disk saves yet.
+Click to move/attack; WASD also moves; Space attacks nearby enemies. **I** opens gear, **C** stats, **E** interacts/collects, **Z / X** use Life/Mana potions, **B** opens a Wormhole, **Q** empowers the next hit for 10 Mana, and wheel zooms. **T** recovers to the garage after defeat. **Esc** opens System, including manual Save/Load and confirmed character/disk-save reset. To replay with your character intact, choose **NEW SORTIE** from the garage map/elevator. This repopulates floors and clears tower-floor loot while retaining keycards. Progress auto-saves to disk.
 
 Read [the playtest guide](docs/PLAYTEST.md) for the Circuit recipe, what to try, and validation limits. `./run.ps1 -Editor` opens the project; `./run.ps1 -Test` runs the rules checks. `./build-windows.ps1` rebuilds the standalone executable.
 

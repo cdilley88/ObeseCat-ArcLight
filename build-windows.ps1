@@ -14,7 +14,7 @@ try {
         New-Item -ItemType Directory -Force $templateDir | Out-Null
         Copy-Item -LiteralPath $Template -Destination $localTemplate
     }
-    & $Godot --headless --path (Join-Path $PSScriptRoot 'prototype') --export-release 'Windows Desktop' (Join-Path $output 'ObeseCat-ArcLight-0.14.exe')
+    & $Godot --headless --path (Join-Path $PSScriptRoot 'prototype') --export-release 'Windows Desktop' (Join-Path $output 'ObeseCat-ArcLight-0.15.exe')
     if ($LASTEXITCODE -ne 0) { throw 'Windows export failed.' }
-    Write-Output "Playable build: $output\ObeseCat-ArcLight-0.14.exe"
+    Write-Output "Playable build: $output\ObeseCat-ArcLight-0.15.exe"
 } finally { $env:APPDATA = $oldAppData }

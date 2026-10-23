@@ -10,12 +10,18 @@ const Loot = preload("res://scripts/loot.gd")
 const Hud = preload("res://scripts/hud.gd")
 const Progression = preload("res://scripts/progression.gd")
 const Backpack = preload("res://scripts/backpack.gd")
-const BOUNDS = Rect2(-10, -8, 20, 16)
+const SaveManager = preload("res://scripts/save_manager.gd")
+const Skills = preload("res://scripts/skills.gd")
+var disk_save_enabled: bool = true
+const BOUNDS = Rect2(-12.5, -10.0, 25.0, 19.5)
 const COVERS = [Rect2(-3.8, -0.8, 2.2, 1.6), Rect2(2.0, 2.3, 2.0, 1.6)]
 const SPAWN = Vector3(-6, 0, 5)
 const FAULT = Vector3(3.2, 0, -3.4)
-
+var holder: SubViewportContainer
 var viewport: SubViewport
+var crisp_graphics: bool = true
+var msaa_level: int = Viewport.MSAA_4X
+const SETTINGS_PATH = "user://settings.json"
 var world: Node3D
 var arena: Node3D
 var dynamic: Node3D
@@ -86,10 +92,51 @@ var potions = {"life":6,"mana":4}
 var potion_cooldowns = {"life":0.0,"mana":0.0}
 var wormhole: Dictionary = {}
 var chef_quest: String = "locked"
+var skills_open = false
+var skills: Dictionary = {
+	"projectile": 1,
+	"nova": 0,
+	"hazard": 0,
+	"overdrive": 0
+}
+var assigned_skill: String = "projectile"
+var skill_cooldowns: Dictionary = {
+	"projectile": 0.0,
+	"nova": 0.0,
+	"hazard": 0.0,
+	"overdrive": 0.0
+}
+var active_buffs: Dictionary = {}
+var ground_hazards: Array = []
+
+const DEFAULT_KEYBINDS = {
+	"move_up": KEY_W,
+	"move_down": KEY_S,
+	"move_left": KEY_A,
+	"move_right": KEY_D,
+	"attack": KEY_SPACE,
+	"interact": KEY_E,
+	"potion_life": KEY_Z,
+	"potion_mana": KEY_X,
+	"character": KEY_C,
+	"inventory": KEY_I,
+	"skills": KEY_K,
+	"map": KEY_V,
+	"wormhole": KEY_B,
+	"system": KEY_ESCAPE
+}
+var keybinds: Dictionary = DEFAULT_KEYBINDS.duplicate()
+
 var audio: AudioStreamPlayer
 var tones: Dictionary = {}
 
+func _notification(what):
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		if started and not is_queued_for_deletion():
+			save_game(true)
+
 func _ready():
+	load_settings()
 	build_viewport()
 	build_audio()
 	hud = Hud.new(self)
@@ -99,18 +146,16 @@ func _ready():
 	hud.update_hud()
 
 func build_viewport():
-	var holder = SubViewportContainer.new()
+	holder = SubViewportContainer.new()
 	holder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	holder.stretch = true
-	holder.stretch_shrink = 2
-	holder.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(holder)
 	viewport = SubViewport.new()
-	viewport.size = Vector2i(640, 400)
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	viewport.handle_input_locally = false
 	holder.add_child(viewport)
+	apply_graphics_settings()
 	world = Node3D.new()
 	viewport.add_child(world)
 	var env = WorldEnvironment.new()
@@ -187,7 +232,7 @@ func build_room():
 	terminal.rotation.z = -0.3
 	var sign = Models.text3d(arena, "CIVIL DEFENSE / TRIAL 01", Vector3(0, 2.0, -7.85), Color("e1c988"), 34)
 	sign.no_depth_test = false
-	var floor_sign = Models.text3d(arena, "AUTHORIZED PETS ONLY", Vector3(-5.5, 0.07, 5.6), Color("aaa47b"), 24)
+	var floor_sign = Models.text3d(arena, "AUTHORIZED PETS ONLY", Vector3(-5.5, 0.07, 5.6), Color("aaa47b"), 24, false)
 	floor_sign.rotation_degrees.x = -90
 	for i in range(12):
 		Models.box(arena, Vector3(-8.2 + i * 0.42, 0.06, 6.8), Vector3(0.22, 0.04, 0.4), Color("c2a257"))
@@ -365,6 +410,8 @@ func restart(new_seed: bool, keep_character: bool = false, destination: String =
 		hp = minf(previous_life,current_stats().max_life)
 		mana = minf(previous_mana,current_stats().max_mana)
 		heal_charges = previous_repairs
+	if started and keep_character and area == "hub":
+		save_game(true)
 	if is_instance_valid(hud):
 		hud.selection = 3
 		hud.refresh_inventory()
@@ -405,10 +452,51 @@ func spawn_enemy(pos: Vector3, boss: bool, index: int, type_id: String = ""):
 	enemy["behavior"] = definition.behavior
 	enemies.append(enemy)
 
-func begin():
+func begin(continue_save: bool = false):
+	if continue_save and SaveManager.has_save():
+		load_game()
+		return
 	started = true
 	toast("Garage Refuge",2)
 	hud.update_hud()
+
+func save_game(silent: bool = false) -> bool:
+	if not disk_save_enabled or not started: return false
+	if not Tower.ZONES.has(area) and area != "hub": return false
+	if Tower.ZONES.has(area): save_zone()
+	var ok = SaveManager.save_game(self)
+	if ok and not silent:
+		toast("Game saved to disk.", 3)
+	return ok
+
+func load_game() -> bool:
+	if not disk_save_enabled or not SaveManager.has_save():
+		toast("No save file found.")
+		return false
+	var ok = SaveManager.load_game(self)
+	return ok
+
+func continue_game():
+	if SaveManager.has_save():
+		load_game()
+	else:
+		begin()
+
+func full_reset(new_seed: bool):
+	SaveManager.delete_save()
+	restart(new_seed)
+	toast("Reset complete. Disk save removed.", 3)
+
+func return_to_title():
+	if disk_save_enabled and started:
+		save_game(true)
+	started = false
+	menu_open = ""
+	inventory_open = false
+	character_open = false
+	paused = false
+	if is_instance_valid(hud):
+		hud.show_title()
 
 func current_stats() -> Dictionary:
 	var stats = progression.derive(Loot.stats(equipment))
@@ -472,6 +560,7 @@ func new_sortie() -> bool:
 	run_number += 1
 	shops = Economy.stock(run_seed+run_number*917,shop_tier())
 	toast("Tower encounters repopulated. Floor loot cleared. Keycards and your character retained.",7)
+	save_game(true)
 	return true
 
 func linked_destination(destination: String) -> bool:
@@ -502,6 +591,7 @@ func travel_zone(destination: String, by_elevator: bool = false) -> bool:
 	if old_area == "hub" and run_number == 0: run_number = 1
 	restart(false,true,destination)
 	if destination != "hub": player.position = arrival
+	save_game(true)
 	return true
 
 func open_tower_map(at_elevator: bool = false):
@@ -586,6 +676,7 @@ func sell_item(item: Dictionary) -> bool:
 	silicon += amount
 	hud.refresh_inventory()
 	toast("Sold " + item.name + " for %d Silicon. Buyback available." % amount)
+	save_game(true)
 	return true
 
 func buy_item(item: Dictionary) -> bool:
@@ -603,6 +694,7 @@ func buy_item(item: Dictionary) -> bool:
 	shops[menu_open].remove_at(index)
 	hud.refresh_inventory()
 	toast("Purchased " + item.name + ".")
+	save_game(true)
 	return true
 
 func buy_back(entry: Dictionary) -> bool:
@@ -619,6 +711,7 @@ func buy_back(entry: Dictionary) -> bool:
 	buyback.remove_at(index)
 	hud.refresh_inventory()
 	toast("Recovered " + entry.item.name + ".")
+	save_game(true)
 	return true
 
 func debug_apply(values: Dictionary) -> bool:
@@ -633,6 +726,7 @@ func debug_apply(values: Dictionary) -> bool:
 	hud.refresh_inventory()
 	hud.refresh_character()
 	toast("DEV values applied. XP reset; Life/Mana restored.")
+	save_game(true)
 	return true
 
 func add_potions(kind: String, amount: int) -> int:
@@ -742,8 +836,19 @@ func open_system():
 	paused = true
 	path.clear()
 	target_contact = {}
-	hud.hide_item_card()
 	hud.hub_menu.open("system")
+
+func open_debug():
+	if not started or area != "hub": return
+	inventory_open = false
+	character_open = false
+	elevator_access = false
+	menu_open = "debug"
+	paused = true
+	path.clear()
+	target_contact = {}
+	hud.hide_item_card()
+	hud.hub_menu.open("debug")
 
 func spend_attribute(attribute: String):
 	var before = current_stats()
@@ -755,6 +860,7 @@ func spend_attribute(attribute: String):
 	hud.refresh_character()
 	hud.refresh_inventory()
 	tone("equip")
+	save_game(true)
 
 func award_xp(amount: int):
 	var gained = progression.gain_xp(amount)
@@ -778,6 +884,204 @@ func toggle_character():
 	target_drop = {}
 	hud.refresh_character()
 	hud.update_hud()
+
+func toggle_skills():
+	if not started: return
+	if menu_open != "": close_contact()
+	skills_open = not skills_open
+	if skills_open:
+		inventory_open = false
+		character_open = false
+	paused = skills_open or inventory_open or character_open
+	path.clear()
+	target_enemy = {}
+	target_drop = {}
+	if is_instance_valid(hud):
+		hud.refresh_skills()
+		hud.update_hud()
+
+func assign_skill(skill_id: String):
+	if skills.has(skill_id) and skills[skill_id] > 0:
+		assigned_skill = skill_id
+		tone("equip")
+		var s_data = Skills.get_skill_data(skill_id, equipment, skills[skill_id])
+		toast("Assigned %s to Right-Click." % s_data.name, 3)
+		if is_instance_valid(hud):
+			hud.refresh_skills()
+			hud.update_hud()
+
+func upgrade_skill(skill_id: String) -> bool:
+	if not skills.has(skill_id): return false
+	if progression.skill_points <= 0:
+		toast("No unspent skill points.", 2.5)
+		return false
+	if skills[skill_id] >= 5:
+		toast("Skill already at maximum rank 5.", 2.5)
+		return false
+	var req = Skills.DEFINITIONS[skill_id].req_level
+	if progression.level < req:
+		toast("Requires Character Level %d." % req, 3)
+		return false
+	if progression.spend_skill():
+		skills[skill_id] += 1
+		tone("equip")
+		var s_data = Skills.get_skill_data(skill_id, equipment, skills[skill_id])
+		toast("Upgraded %s to Rank %d/5!" % [s_data.name, skills[skill_id]], 3)
+		save_game(true)
+		if is_instance_valid(hud):
+			hud.refresh_skills()
+			hud.update_hud()
+		return true
+	return false
+
+func cast_assigned_skill_at(point: Vector3):
+	if not started or paused or hp <= 0: return
+	if point == null: return
+	if not skills.has(assigned_skill) or skills[assigned_skill] <= 0:
+		toast("No skill assigned or unlearned. Press K to open Skills.", 3)
+		return
+	var rank = skills[assigned_skill]
+	var data = Skills.get_skill_data(assigned_skill, equipment, rank)
+	if data.is_empty(): return
+	
+	if skill_cooldowns.get(assigned_skill, 0.0) > 0:
+		tone("deny")
+		return
+		
+	if mana < data.mana_cost:
+		tone("deny")
+		toast("Need %d Mana to cast %s." % [int(data.mana_cost), data.name], 2.5)
+		return
+		
+	mana -= data.mana_cost
+	skill_cooldowns[assigned_skill] = data.cooldown
+	
+	var dir = player.position.direction_to(point)
+	if dir.length() > 0.05:
+		pet.rotation.y = atan2(-dir.x, -dir.z)
+		
+	execute_skill(data, point)
+
+func execute_skill(data: Dictionary, target_pos: Vector3):
+	match data.id:
+		"projectile":
+			launch_spell_projectile(player.position + Vector3(0, 0.8, 0), target_pos + Vector3(0, 0.7, 0), data)
+		"nova":
+			cast_spell_nova(data)
+		"hazard":
+			cast_spell_hazard(target_pos, data)
+		"overdrive":
+			cast_spell_overdrive(data)
+	tone("hit")
+
+func launch_spell_projectile(from: Vector3, to: Vector3, data: Dictionary):
+	var node = Node3D.new()
+	dynamic.add_child(node)
+	node.position = from
+	var sphere = Models.sphere(node, Vector3.ZERO, Vector3.ONE * 0.38, data.color, true)
+	if is_instance_valid(sphere):
+		sphere.material_override.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	node.look_at(to)
+	effects.append({
+		"node": node,
+		"spell_projectile": true,
+		"target": to,
+		"time": 2.5,
+		"duration": 2.5,
+		"expand": false,
+		"speed": 14.0,
+		"data": data
+	})
+
+func explode_spell_projectile(pos: Vector3, data: Dictionary):
+	var radius = 2.4
+	pulse(pos, data.color, radius, 0.5)
+	var flash = Node3D.new()
+	dynamic.add_child(flash)
+	flash.position = pos
+	var sphere = Models.sphere(flash, Vector3.ZERO, Vector3.ONE * radius * 0.6, data.color, true)
+	if is_instance_valid(sphere):
+		sphere.material_override.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	effects.append({"node": flash, "time": 0.2, "duration": 0.2, "expand": true})
+	
+	var primary_hit = null
+	for enemy in enemies:
+		if enemy.hp > 0 and enemy.node.position.distance_to(pos - Vector3.UP * 0.7) <= radius and clear_shot(pos, enemy.node.position):
+			apply_enemy_damage(enemy, data.base_damage, data.element, 8.0)
+			primary_hit = enemy
+			if data.affinity == "Draconic" and data.resonance_active:
+				enemy["burn"] = 3.0
+				enemy["burn_damage"] = data.base_damage * 0.35
+				
+	# Secondary Resonance Effects
+	if data.resonance_active:
+		if data.affinity == "Cybernetic" and primary_hit != null:
+			for other in enemies:
+				if not is_same(other, primary_hit) and other.hp > 0 and other.node.position.distance_to(primary_hit.node.position) < 4.5:
+					beam(primary_hit.node.position + Vector3(0, 0.7, 0), other.node.position + Vector3(0, 0.7, 0), data.color)
+					apply_enemy_damage(other, data.base_damage * 0.75, data.element, 8.0)
+					break
+		elif data.affinity == "Visceral":
+			spawn_ground_hazard(pos, data.color, 1.8, 3.5, data.base_damage * 0.3, "radiation", true)
+
+func cast_spell_nova(data: Dictionary):
+	var radius = 3.6 if not data.resonance_active else 5.2
+	pulse(player.position, data.color, radius, 0.6)
+	for enemy in enemies:
+		if enemy.hp > 0 and enemy.node.position.distance_to(player.position) <= radius:
+			apply_enemy_damage(enemy, data.base_damage, data.element, radius)
+			if data.affinity == "Cybernetic":
+				enemy["stop"] = 1.4
+			elif data.affinity == "Visceral":
+				var push = player.position.direction_to(enemy.node.position) * 1.8
+				enemy.node.position += Vector3(push.x, 0, push.z)
+			elif data.affinity == "Draconic":
+				enemy["burn"] = 3.5
+				enemy["burn_damage"] = data.base_damage * 0.4
+
+func cast_spell_hazard(pos: Vector3, data: Dictionary):
+	var radius = 2.8
+	var duration = 6.0
+	spawn_ground_hazard(pos, data.color, radius, duration, data.base_damage, data.element, data.affinity == "Visceral")
+	toast("%s deployed." % data.name, 2.5)
+
+func spawn_ground_hazard(pos: Vector3, color: Color, radius: float, duration: float, dps: float, element: String, slows: bool):
+	var node = Node3D.new()
+	dynamic.add_child(node)
+	node.position = Vector3(pos.x, 0.05, pos.z)
+	Models.ring(node, radius, color)
+	Models.cylinder(node, Vector3.ZERO, radius * 0.85, 0.04, Color(color, 0.35), true)
+	ground_hazards.append({
+		"node": node,
+		"pos": pos,
+		"color": color,
+		"radius": radius,
+		"duration": duration,
+		"tick_timer": 0.5,
+		"dps": dps,
+		"element": element,
+		"slows": slows
+	})
+
+func update_ground_hazards(delta: float):
+	for h in ground_hazards.duplicate():
+		h.duration -= delta
+		h.tick_timer -= delta
+		if h.tick_timer <= 0:
+			h.tick_timer = 0.5
+			for enemy in enemies:
+				if enemy.hp > 0 and enemy.node.position.distance_to(h.pos) <= h.radius:
+					apply_enemy_damage(enemy, h.dps * 0.5, h.element, h.radius)
+					if h.slows:
+						enemy["slow"] = 1.0
+		if h.duration <= 0:
+			if is_instance_valid(h.node): h.node.queue_free()
+			ground_hazards.erase(h)
+
+func cast_spell_overdrive(data: Dictionary):
+	active_buffs[data.id] = data.duration
+	pulse(player.position, data.color, 2.2, 0.8)
+	toast("%s ENGAGED · %ds duration" % [data.name.to_upper(), int(data.duration)], 3)
 
 func toggle_empowered():
 	if not started or paused or hp <= 0: return
@@ -905,11 +1209,119 @@ func cycle_socket(index: int):
 
 func toggle_fx():
 	effects_enabled = not effects_enabled
+	save_settings()
 	hud.update_hud()
 
 func toggle_sound():
 	sound_enabled = not sound_enabled
+	save_settings()
 	hud.update_hud()
+
+func apply_graphics_settings():
+	if not is_instance_valid(holder) or not is_instance_valid(viewport):
+		return
+	if crisp_graphics:
+		holder.stretch_shrink = 1
+		holder.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	else:
+		holder.stretch_shrink = 2
+		holder.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	viewport.msaa_3d = msaa_level
+
+func toggle_resolution():
+	crisp_graphics = not crisp_graphics
+	apply_graphics_settings()
+	save_settings()
+	if is_instance_valid(hud): hud.update_hud()
+
+func cycle_msaa():
+	match msaa_level:
+		Viewport.MSAA_DISABLED: msaa_level = Viewport.MSAA_2X
+		Viewport.MSAA_2X: msaa_level = Viewport.MSAA_4X
+		Viewport.MSAA_4X: msaa_level = Viewport.MSAA_8X
+		Viewport.MSAA_8X: msaa_level = Viewport.MSAA_DISABLED
+		_: msaa_level = Viewport.MSAA_4X
+	apply_graphics_settings()
+	save_settings()
+	if is_instance_valid(hud): hud.update_hud()
+
+func msaa_name() -> String:
+	match msaa_level:
+		Viewport.MSAA_DISABLED: return "OFF"
+		Viewport.MSAA_2X: return "2X"
+		Viewport.MSAA_4X: return "4X"
+		Viewport.MSAA_8X: return "8X"
+		_: return "OFF"
+
+func toggle_fullscreen():
+	var mode = DisplayServer.window_get_mode()
+	if mode == DisplayServer.WINDOW_MODE_FULLSCREEN or mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	else:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+	save_settings()
+	if is_instance_valid(hud): hud.update_hud()
+
+func is_fullscreen() -> bool:
+	var mode = DisplayServer.window_get_mode()
+	return mode == DisplayServer.WINDOW_MODE_FULLSCREEN or mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
+
+static func delete_settings(path: String = SETTINGS_PATH) -> bool:
+	if not FileAccess.file_exists(path): return false
+	var dir = DirAccess.open("user://")
+	if dir:
+		var fname = path.replace("user://", "")
+		return dir.remove(fname) == OK
+	return false
+
+func get_key_name(action: String) -> String:
+	var code = keybinds.get(action, DEFAULT_KEYBINDS.get(action, 0))
+	if code == KEY_ESCAPE: return "Esc"
+	return OS.get_keycode_string(code)
+
+func rebind_key(action: String, code: int):
+	if DEFAULT_KEYBINDS.has(action):
+		keybinds[action] = code
+		save_settings()
+		if is_instance_valid(hud): hud.update_key_badges()
+
+func reset_keybinds():
+	keybinds = DEFAULT_KEYBINDS.duplicate()
+	save_settings()
+	if is_instance_valid(hud): hud.update_key_badges()
+
+func load_settings():
+	if not FileAccess.file_exists(SETTINGS_PATH): return
+	var f = FileAccess.open(SETTINGS_PATH, FileAccess.READ)
+	if not f: return
+	var json = JSON.new()
+	if json.parse(f.get_as_text()) == OK and typeof(json.data) == TYPE_DICTIONARY:
+		var d = json.data
+		crisp_graphics = bool(d.get("crisp_graphics", true))
+		msaa_level = int(d.get("msaa_level", Viewport.MSAA_4X))
+		effects_enabled = bool(d.get("effects_enabled", effects_enabled))
+		sound_enabled = bool(d.get("sound_enabled", sound_enabled))
+		if d.has("keybinds") and typeof(d.keybinds) == TYPE_DICTIONARY:
+			for action in DEFAULT_KEYBINDS:
+				if d.keybinds.has(action):
+					keybinds[action] = int(d.keybinds[action])
+		if d.get("fullscreen", false) and not is_fullscreen():
+			toggle_fullscreen()
+	f.close()
+
+func save_settings():
+	var f = FileAccess.open(SETTINGS_PATH, FileAccess.WRITE)
+	if not f: return
+	var d = {
+		"crisp_graphics": crisp_graphics,
+		"msaa_level": msaa_level,
+		"effects_enabled": effects_enabled,
+		"sound_enabled": sound_enabled,
+		"fullscreen": is_fullscreen(),
+		"keybinds": keybinds
+	}
+	f.store_string(JSON.stringify(d, "\t"))
+	f.close()
 
 func toast(text: String, duration: float = 4):
 	message = text
@@ -920,35 +1332,48 @@ func _unhandled_input(event):
 		camera.size = clampf(camera.size + (-1.5 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1.5), 13.5, 28.5)
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
-		match event.physical_keycode:
-			KEY_ENTER:
-				if not started: begin()
-			KEY_I, KEY_TAB: toggle_inventory()
-			KEY_C: toggle_character()
-			KEY_Q: toggle_empowered()
-			KEY_T: repeat_chamber()
-			KEY_V: open_tower_map()
-			KEY_F: toggle_fx()
-			KEY_M: toggle_sound()
-			KEY_ESCAPE:
-				if menu_open != "": close_contact()
-				elif inventory_open: toggle_inventory()
-				elif character_open: toggle_character()
-				elif started: open_system()
-			KEY_E:
-				if started and not paused and hp > 0: interact_nearby()
-			KEY_B: cast_wormhole()
-			KEY_Z: drink_potion("life")
-			KEY_X: drink_potion("mana")
+		if (event.physical_keycode == KEY_F11) or (event.physical_keycode == KEY_ENTER and event.alt_pressed):
+			toggle_fullscreen()
+			return
+		if not started:
+			# Global toggles allowed on title screen; other inputs are handled by TitleScreen
+			match event.physical_keycode:
+				KEY_F: toggle_fx()
+				KEY_M: toggle_sound()
+			return
+		var code = event.physical_keycode
+		if code == KEY_ENTER: pass
+		elif code == keybinds.get("inventory", KEY_I) or code == KEY_TAB: toggle_inventory()
+		elif code == keybinds.get("character", KEY_C): toggle_character()
+		elif code == keybinds.get("skills", KEY_K): toggle_skills()
+		elif code == KEY_Q: cast_assigned_skill_at(ground_point(get_viewport().get_mouse_position()))
+		elif code == KEY_T: repeat_chamber()
+		elif code == keybinds.get("map", KEY_V): open_tower_map()
+		elif code == KEY_F: toggle_fx()
+		elif code == KEY_M: toggle_sound()
+		elif code == keybinds.get("system", KEY_ESCAPE):
+			if skills_open: toggle_skills()
+			elif menu_open != "": close_contact()
+			elif inventory_open: toggle_inventory()
+			elif character_open: toggle_character()
+			elif started: open_system()
+		elif code == keybinds.get("interact", KEY_E):
+			if started and not paused and hp > 0: interact_nearby()
+		elif code == keybinds.get("wormhole", KEY_B): cast_wormhole()
+		elif code == keybinds.get("potion_life", KEY_Z): drink_potion("life")
+		elif code == keybinds.get("potion_mana", KEY_X): drink_potion("mana")
 		return
 	if not started or paused or hp <= 0: return
-	if event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT]:
+	if event is InputEventMouseButton and event.pressed:
 		var point = ground_point(event.position)
 		if point == null: return
-		target_enemy = {}
-		target_drop = {}
-		target_contact = {}
-		if event.button_index == MOUSE_BUTTON_LEFT:
+		if event.button_index == MOUSE_BUTTON_RIGHT:
+			cast_assigned_skill_at(point)
+			return
+		elif event.button_index == MOUSE_BUTTON_LEFT:
+			target_enemy = {}
+			target_drop = {}
+			target_contact = {}
 			var contact_distance = 55.0
 			for contact in interactables:
 				if contact.role == "chest" and contact.chest.opened: continue
@@ -969,12 +1394,12 @@ func _unhandled_input(event):
 					var screen = camera.unproject_position(drop.node.position + Vector3(0, 0.4, 0)) * Vector2(get_viewport().get_visible_rect().size) / Vector2(viewport.size)
 					if screen.distance_to(event.position) < 40:
 						target_drop = drop
-		if not target_contact.is_empty(): point = target_contact.node.position
-		if not target_enemy.is_empty(): point = target_enemy.node.position
-		if not target_drop.is_empty(): point = target_drop.node.position
-		path = make_path(player.position, point)
-		repath_timer = 0
-		pulse(point, Color("65d4bb"), 0.3, 0.35)
+			if not target_contact.is_empty(): point = target_contact.node.position
+			if not target_enemy.is_empty(): point = target_enemy.node.position
+			if not target_drop.is_empty(): point = target_drop.node.position
+			path = make_path(player.position, point)
+			repath_timer = 0
+			pulse(point, Color("65d4bb"), 0.3, 0.35)
 
 func ground_point(screen: Vector2):
 	var local = screen * Vector2(viewport.size) / get_viewport().get_visible_rect().size
@@ -987,6 +1412,11 @@ func _physics_process(delta):
 	if is_instance_valid(hud): hud.update_hud()
 	if not started or paused: return
 	for kind in potion_cooldowns: potion_cooldowns[kind] = maxf(0,potion_cooldowns[kind]-delta)
+	for s in skill_cooldowns: skill_cooldowns[s] = maxf(0, skill_cooldowns[s] - delta)
+	for b in active_buffs.keys():
+		active_buffs[b] -= delta
+		if active_buffs[b] <= 0: active_buffs.erase(b)
+	update_ground_hazards(delta)
 	message_time = maxf(0, message_time - delta)
 	clock += delta
 	if not target_contact.is_empty() and player.position.distance_to(target_contact.node.position) <= 2.0:
@@ -1002,7 +1432,11 @@ func _physics_process(delta):
 	var direction = Vector3.ZERO
 	mana = minf(stats.max_mana, mana + stats.mana_regen * delta)
 	hp = minf(stats.max_life,hp+stats.life_regen*delta)
-	var key_direction = Vector2(float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)), float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W)))
+	var up_key = keybinds.get("move_up", KEY_W)
+	var down_key = keybinds.get("move_down", KEY_S)
+	var left_key = keybinds.get("move_left", KEY_A)
+	var right_key = keybinds.get("move_right", KEY_D)
+	var key_direction = Vector2(float(Input.is_physical_key_pressed(right_key)) - float(Input.is_physical_key_pressed(left_key)), float(Input.is_physical_key_pressed(down_key)) - float(Input.is_physical_key_pressed(up_key)))
 	if key_direction.length() > 0:
 		path.clear()
 		target_contact = {}
@@ -1030,7 +1464,8 @@ func _physics_process(delta):
 			path.clear()
 		while not path.is_empty() and player.position.distance_to(path[0]) < 0.18: path.pop_front()
 		if not path.is_empty(): direction = player.position.direction_to(path[0])
-	if Input.is_physical_key_pressed(KEY_SPACE):
+	var attack_key = keybinds.get("attack", KEY_SPACE)
+	if Input.is_physical_key_pressed(attack_key):
 		var nearest = nearest_enemy(weapon_reach(selected_weapon()))
 		if not nearest.is_empty(): request_attack(nearest)
 	if attack_windup >= 0:
@@ -1077,6 +1512,8 @@ func _process(delta):
 	var follow = 1.0 if Tower.ZONES.has(area) else clampf(0.1 + (24.0 - camera.size) * 0.075, 0.1, 0.88)
 	var focus = Vector3(player.position.x * follow, 0, player.position.z * follow)
 	var desired = Vector3(19, 24, 19) + focus
+	if not started:
+		desired += Vector3(sin(clock * 0.4) * 1.5, 0, cos(clock * 0.4) * 1.2)
 	camera.position = camera.position.lerp(desired, minf(1.0, delta * 5))
 	# Preserve the isometric angle while the camera follows, including paused zoom.
 	camera.rotation_degrees = Vector3(-41.77, 45, 0)
@@ -1175,6 +1612,10 @@ func apply_enemy_damage(enemy: Dictionary, amount: float, kind: String, reach: f
 	elif kind == "corruption": dealt *= rng.randf_range(0.5,1.5)
 	elif kind == "electromagnetic": dealt *= rng.randf_range(0.8,1.2)
 	hit_enemy(enemy,dealt)
+	if active_buffs.has("overdrive"):
+		var m_aff = Skills.get_matrix_affinity(equipment)
+		if m_aff == "Visceral":
+			hp = minf(current_stats().max_life, hp + dealt * 0.35)
 	if include_flat and kind != "heat" and modifiers.flat_heat > 0 and enemy.hp > 0:
 		apply_enemy_damage(enemy,modifiers.flat_heat,"heat",reach,false)
 	if enemy.hp <= 0: return
@@ -1299,6 +1740,15 @@ func damage_player(amount: float, kind: String = "physical", apply_status: bool 
 	if apply_status and kind == "electromagnetic": amount *= rng.randf_range(0.8,1.2)
 	var dealt = maxf(1,amount-stats.armor) * (1.0-stats.reduction/100.0) * (1.0-resist/100.0)
 	dealt = maxf(0,dealt-stats.flat_reduction-(stats.elemental_reduction if kind != "physical" else 0.0))
+	if active_buffs.has("overdrive"):
+		var m_aff = Skills.get_matrix_affinity(equipment)
+		if m_aff == "Cybernetic" and mana >= 5.0:
+			var absorbed = dealt * 0.45
+			dealt *= 0.55
+			mana = maxf(0, mana - absorbed * 0.5)
+			pulse(player.position, Color("80d4ff"), 1.2, 0.25)
+		elif m_aff == "Draconic":
+			dealt = maxf(0, dealt - 8.0)
 	hp = maxf(0,hp-dealt)
 	if apply_status and kind in ["heat","radiation"]:
 		if player_status.burn <= 0:
@@ -1462,6 +1912,11 @@ func update_effects(delta: float):
 				for enemy in enemies:
 					if not effect.get("hostile",false) and enemy.hp > 0 and enemy.node.position.distance_to(effect.target-Vector3.UP*0.7) <= effect.radius and clear_shot(effect.target,enemy.node.position):
 						apply_enemy_damage(enemy,effect.damage,effect.kind,effect.get("reach",8.0))
+				effect.time = 0
+		if effect.get("spell_projectile", false):
+			effect.node.position = effect.node.position.move_toward(effect.target, delta * effect.speed)
+			if effect.node.position.distance_to(effect.target) < 0.22:
+				explode_spell_projectile(effect.target, effect.data)
 				effect.time = 0
 		if effect.has("sweep"):
 			effect.node.rotation.y = effect.start_angle + effect.sweep*(1.0-effect.time/effect.duration)
@@ -1633,3 +2088,4 @@ func breath_attack(weapon: Dictionary, damage: float, color: Color):
 		var offset: Vector3 = enemy.node.position-player.position
 		if enemy.hp > 0 and offset.length() <= reach and direction.dot(offset.normalized()) >= cos(0.4) and clear_shot(player.position,enemy.node.position):
 			apply_enemy_damage(enemy,damage,weapon.type,reach)
+

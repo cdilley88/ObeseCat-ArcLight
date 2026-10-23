@@ -25,7 +25,7 @@ func run():
 	await process_frame
 	await physics_frame
 	check(game.area == "hub" and game.enemies.is_empty(),"new characters spawn safely in town")
-	check(game.interactables.size() == 8,"six contacts plus stairs and elevator")
+	check(game.interactables.size() == 6,"four contacts plus stairs and elevator")
 	check(game.silicon == 80 and game.run_number == 0,"initial currency and run state")
 	for entry in game.interactables: check(not game.make_path(game.player.position,entry.node.position).is_empty(),"every contact has reachable navigation endpoint")
 	var life: float = game.hp
@@ -66,10 +66,11 @@ func run():
 	check(not game.buy_back(entry) and game.silicon == money,"full bag buyback charges nothing")
 	game.close_contact()
 	check(not game.sell_item(game.inventory[0]),"trade APIs refuse out-of-vendor calls")
-	check(not game.debug_apply({"silicon":999}),"debug requires debug NPC")
+	check(not game.debug_apply({"silicon":999}),"debug requires debug menu")
 	game.restart(false)
 	preload("res://tests/legacy_kit.gd").install(game)
-	visit(game,"debug")
+	game.open_debug()
+	check(game.menu_open == "debug","debug opens from system tools")
 	check(game.debug_apply({"level":8,"points":12,"strength":31,"dexterity":20,"vitality":15,"energy":18,"silicon":1200}),"debug sets requested fields")
 	check(game.progression.level == 8 and game.progression.xp == 0 and game.progression.attributes.strength == 31 and game.silicon == 1200,"exact debug values applied")
 	check(game.hp == game.current_stats().max_life and game.mana == game.current_stats().max_mana,"debug refills resources")

@@ -1,5 +1,51 @@
 # Current state
 
+Updated 2026-10-22. **TECH DEMO 0.16: Diablo-Style Active Skills, Affinity Resonance & Keyboard Customization.**
+
+Implemented a hybrid Diablo 1-style active spellbook and Diablo-style combat rhythm with full equipment affinity synergy and full control rebinding:
+
+- **Diablo-Style Combat Input**:
+  - **Left-Click**: Physical / melee / weapon attack rhythm.
+  - **Right-Click**: Casts currently assigned active skill at target point.
+  - Dedicated `[Q]` key also triggers active skill toward mouse cursor.
+- **Symmetrical Hotbar Evolution**:
+  - Added dedicated **Left-Click Weapon Slot** (`L-CLK`) and **Right-Click Assigned Skill Slot** (`R-CLK`) flanking the central bottom console.
+  - Slots display active item/spell icon, elemental color borders, live cooldown overlays, and detailed tooltips.
+  - Clicking Weapon Slot opens Inventory (`[I]`); clicking Skill Slot opens Skill Matrix (`[K]`).
+- **Skill Progression & Matrix Synergy**:
+  - Characters earn **1 Skill Point per Level Up**.
+  - 4 Core Spell Archetypes across 3 Affinities:
+    1. **Tier 1 (Directed Projectile)**: Plasma Orb (Cybernetic, piercing arc) / Acid Glob (Visceral, corrosive burst) / Fireball (Draconic, explosive splash).
+    2. **Tier 2 (Point-Blank Nova)**: EMP Discharge (Cybernetic, stun) / Tendril Flail (Visceral, 360° knockback) / Dragon's Breath (Draconic, searing frontal cone).
+    3. **Tier 3 (Ground Hazard)**: Shock Field (Cybernetic, static field) / Caustic Bile Pool (Visceral, acid puddle) / Magma Rift (Draconic, bubbling fissure).
+    4. **Tier 4 (Tactical Overdrive)**: Overclock Shield (Cybernetic, mana shield) / Symbiotic Frenzy (Visceral, lifesteal) / Dragon's Fury (Draconic, damage reduction + retaliation).
+  - **Equipment Balance & Matrix Affinity**: Spells dynamically morph their elemental damage kind, visuals, particle effects, and descriptions based on the equipped gear affinity.
+  - **Affinity Resonance (4+ Matching Pieces)**: Equipping 4 or more matching affinity items grants **+25% Spell Potency, -20% Mana Cost discount**, and unlocks secondary proc effects (chain lightning, lingering acid, burning DOT).
+- **Persistent Keybinding Customization**:
+  - Added full keyboard rebinding modal to both the In-Game System Menu (`hub_menu.gd`) and Title Screen Options modal (`title_screen.gd`).
+  - Supports remapping all 14 game actions: Move (W/A/S/D), Attack (Space), Interact (E), Potions (Z/X), Panels (C/I/K/V/B), and System (Esc).
+  - Includes interactive input listener, key name badges, "Reset to Defaults" button, and persistent serialization to `user://settings.json`.
+- **Validation**:
+  - Created automated test suite `test_skills.gd` (108 assertions) testing archetype completeness, affinity morphing, resonance thresholds, progression, combat casting, and keybinding persistence.
+  - All 13 test suites pass with **0 failures** across thousands of assertions.
+  - Built updated standalone Windows executable: `builds/windows/ObeseCat-ArcLight-0.15.exe`.
+
+## Historical 0.15 increment
+
+Updated 2026-10-21. **TECH DEMO 0.15: Opening FMV & ArcLight Title Screen.**
+
+Introduced authentic PS1-era opening boot sequence and dedicated ArcLight Title Screen:
+
+- **Developer Splash FMV (`VideoStreamPlayer`)**:
+  - Plays `res://assets/video/its_presents_arclight.ogv` (transcoded from user's Premiere Pro CS6 1280x720 master to native Godot Theora/Vorbis, compressed from 5.8 MB to 1.28 MB).
+  - Authentic PS1 skip rule: press any key (`Space`, `Enter`, `Escape`) or mouse click anywhere to instantly cut to the Title Screen.
+  - Fast-bypassed in headless mode so automated regression tests and CI run with zero delay.
+- **ArcLight Title Screen**:
+  - Displays original user vector hero logo (`res://assets/ui/arclight_logo.png`) rendered over live 3D Garage Refuge scene with subtle ambient camera drift and active CRT scanline shader.
+  - Options, Credits & Intel, Continue Game, New Game, and Quit to Desktop.
+
+## Historical 0.14 increment
+
 Updated 2026-09-19. **TECH DEMO 0.14: Draconic and Visceral equipment.**
 
 13 Draconic and 6 Visceral bases have inventory art, worn models and standard randomized itemization. Enemy affinity weighting and neutral chest pools are centralized. New characters start with only a white Phase blade. See AFFINITY_ITEMS.md for exact rules, temporary choices and playtest instructions.

@@ -61,10 +61,11 @@ func show_role(role: String):
 	elif role == "dispatch": dispatch_quest()
 	elif role == "arena_control": arena_controls()
 	elif role == "system": system_menu()
+	elif role == "keybinds": keybinds_menu()
 	elif role == "reset_confirm":
-		body.add_child(text("Reset character, inventory, currency and tower? This cannot be undone.",18))
-		body.add_child(button("RESET EVERYTHING",func(): game.restart(false)))
-		body.add_child(button("RESET WITH NEW SEED",func(): game.restart(true)))
+		body.add_child(text("Reset character, inventory, currency and tower? This deletes disk save and cannot be undone.",18))
+		body.add_child(button("RESET EVERYTHING (WIPES DISK SAVE)",func(): game.full_reset(false)))
+		body.add_child(button("RESET WITH NEW SEED (WIPES DISK SAVE)",func(): game.full_reset(true)))
 		body.add_child(button("CANCEL",func(): game.menu_open = "system"; show_role("system")))
 	elif role in ["tower","elevator"]: tower_map(role)
 	else:
@@ -197,6 +198,7 @@ func debugger():
 		for key in debug_fields: settings[key] = int(debug_fields[key].value)
 		game.debug_apply(settings)
 		show_role("debug")))
+	body.add_child(button("BACK TO SYSTEM MENU", func(): game.open_system()))
 
 func tower_map(role: String):
 	body.add_theme_constant_override("separation",5)
@@ -219,18 +221,120 @@ func tower_map(role: String):
 	body.add_child(text("Current: " + ("Garage Refuge" if game.area == "hub" else game.Tower.ZONES.get(game.area,{}).get("name","Test chamber")),14))
 	if game.area == "hub":
 		body.add_child(button("NEW SORTIE / RESPAWN FLOORS + CLEAR FLOOR LOOT",func(): game.new_sortie(); show_role(role)))
-	else: body.add_child(text("Floor damage, corpses and loot persist until a new sortie. No disk saves yet.",13))
+	else: body.add_child(text("Floor damage, corpses and loot persist until a new sortie. Saved to disk.",13))
 
 func system_menu():
 	body.add_child(button("RESUME",func(): game.close_contact()))
-	game.hud.fx_button = button("",func(): game.toggle_fx())
-	body.add_child(game.hud.fx_button)
-	game.hud.sound_button = button("",func(): game.toggle_sound())
-	body.add_child(game.hud.sound_button)
-	body.add_child(text("C  Character     I  Inventory     V  Map     B  Wormhole\nZ  Life potion     X  Mana potion     Esc  System\nClick / WASD  Move     Click / Space  Attack     E  Interact / Loot\nQ  Empower     Wheel  Zoom     T  Recover after defeat",17))
+	var save_row = HBoxContainer.new()
+	save_row.add_child(button("SAVE GAME",func(): game.save_game()))
+	var load_btn = button("LOAD GAME",func():
+		if game.load_game(): game.close_contact())
+	load_btn.disabled = not preload("res://scripts/save_manager.gd").has_save()
+	save_row.add_child(load_btn)
+	body.add_child(save_row)
+	body.add_child(button("SAVE & RETURN TO TITLE",func(): game.return_to_title()))
+	
+	var gfx_row = HBoxContainer.new()
+	gfx_row.add_theme_constant_override("separation", 8)
+	game.hud.resolution_button = button("", func(): game.toggle_resolution())
+	gfx_row.add_child(game.hud.resolution_button)
+	game.hud.msaa_button = button("", func(): game.cycle_msaa())
+	gfx_row.add_child(game.hud.msaa_button)
+	body.add_child(gfx_row)
+	
+	var opt_row = HBoxContainer.new()
+	opt_row.add_theme_constant_override("separation", 8)
+	game.hud.display_button = button("", func(): game.toggle_fullscreen())
+	opt_row.add_child(game.hud.display_button)
+	game.hud.fx_button = button("", func(): game.toggle_fx())
+	opt_row.add_child(game.hud.fx_button)
+	game.hud.sound_button = button("", func(): game.toggle_sound())
+	opt_row.add_child(game.hud.sound_button)
+	body.add_child(opt_row)
+	
+	body.add_child(button("CUSTOMIZE KEYBOARD CONTROLS...", func(): show_role("keybinds")))
+	body.add_child(text("C  Character     I  Inventory     K  Skills     V  Map     B  Wormhole\nZ  Life potion     X  Mana potion     Esc  System     F11  Fullscreen\nLeft-Click / WASD  Move / Attack     Right-Click / Q  Cast Skill\nE  Interact / Loot     Wheel  Zoom     T  Recover after defeat",15))
+	if game.area == "hub":
+		body.add_child(button("DEVELOPER & DEBUG TOOLS...", func(): game.open_debug()))
 	body.add_child(button("RESET CHARACTER / TOWER...",func(): game.menu_open = "reset_confirm"; show_role("reset_confirm")))
-	body.add_child(text("Session only / no disk saves. Tech Demo 0.14",13))
+	body.add_child(text("Auto-saves in Garage & floor changes · %s" % (OS.get_user_data_dir() + "/arclight_save.json"),11))
 	game.hud.update_hud()
+
+var rebinding_action: String = ""
+
+func keybinds_menu():
+	body.add_child(text("CUSTOMIZE KEYBOARD CONTROLS & BINDINGS", 20))
+	body.add_child(text("Click any action button below to listen, then press your desired key to reassign it.", 14))
+	if rebinding_action != "":
+		body.add_child(text(">>> LISTENING: PRESS ANY KEY TO BIND [%s] <<<" % rebinding_action.to_upper(), 16))
+	
+	var scroll = ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(980, 270)
+	body.add_child(scroll)
+	
+	var grid = GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 24)
+	grid.add_theme_constant_override("v_separation", 6)
+	scroll.add_child(grid)
+	
+	var actions = [
+		["move_up", "Move Forward / Up"],
+		["move_down", "Move Backward / Down"],
+		["move_left", "Move Left"],
+		["move_right", "Move Right"],
+		["attack", "Physical Attack (Melee/Weapon)"],
+		["interact", "Interact / Loot Drops"],
+		["potion_life", "Drink Life Potion"],
+		["potion_mana", "Drink Mana Potion"],
+		["character", "Character Sheet"],
+		["inventory", "Inventory Grid"],
+		["skills", "Skill Matrix & Spells"],
+		["map", "Tower Map"],
+		["wormhole", "Wormhole Portal"],
+		["system", "Pause / System Menu"]
+	]
+	
+	for entry in actions:
+		var act_id = entry[0]
+		var act_label = entry[1]
+		var row = HBoxContainer.new()
+		row.custom_minimum_size = Vector2(460, 32)
+		row.add_theme_constant_override("separation", 10)
+		grid.add_child(row)
+		
+		var lbl = text(act_label + ":", 14)
+		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(lbl)
+		
+		var current_key = game.get_key_name(act_id)
+		var btn_text = "[ PRESS KEY... ]" if rebinding_action == act_id else "[ %s ]" % current_key
+		var btn = button(btn_text, func(aid = act_id):
+			rebinding_action = aid
+			show_role("keybinds")
+		)
+		btn.custom_minimum_size = Vector2(160, 28)
+		row.add_child(btn)
+		
+	var b_row = HBoxContainer.new()
+	b_row.add_theme_constant_override("separation", 16)
+	body.add_child(b_row)
+	b_row.add_child(button("RESET TO DEFAULT KEYBINDINGS", func():
+		game.reset_keybinds()
+		rebinding_action = ""
+		show_role("keybinds")
+	))
+	b_row.add_child(button("BACK TO SYSTEM MENU", func():
+		rebinding_action = ""
+		show_role("system")
+	))
+
+func _unhandled_input(event):
+	if visible and rebinding_action != "" and event is InputEventKey and event.pressed and not event.echo:
+		game.rebind_key(rebinding_action, event.physical_keycode)
+		rebinding_action = ""
+		show_role("keybinds")
+		get_viewport().set_input_as_handled()
 
 func arena_controls():
 	body.add_theme_constant_override("separation",5)

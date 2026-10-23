@@ -5,6 +5,7 @@ const POINTS_PER_LEVEL = 5
 var level: int = 1
 var xp: int = 0
 var points: int = 0
+var skill_points: int = 0
 var attributes: Dictionary = {"strength": 10, "dexterity": 10, "vitality": 10, "energy": 10}
 
 func required_xp() -> int:
@@ -18,8 +19,14 @@ func gain_xp(amount: int) -> int:
 		xp -= required_xp()
 		level += 1
 		points += POINTS_PER_LEVEL
+		skill_points += 1
 		gained += 1
 	return gained
+
+func spend_skill() -> bool:
+	if skill_points <= 0: return false
+	skill_points -= 1
+	return true
 
 func spend(attribute: String) -> bool:
 	if points <= 0 or not ATTRIBUTES.has(attribute): return false

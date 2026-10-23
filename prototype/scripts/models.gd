@@ -21,7 +21,7 @@ static func box(parent: Node3D, pos: Vector3, size: Vector3, color: Color, glow:
 	node.position = pos
 	return node
 
-static func sphere(parent: Node3D, pos: Vector3, size: Vector3, color: Color) -> MeshInstance3D:
+static func sphere(parent: Node3D, pos: Vector3, size: Vector3, color: Color, glow: bool = false) -> MeshInstance3D:
 	var node = MeshInstance3D.new()
 	var mesh = SphereMesh.new()
 	mesh.radial_segments = 10
@@ -29,7 +29,7 @@ static func sphere(parent: Node3D, pos: Vector3, size: Vector3, color: Color) ->
 	mesh.radius = 0.5
 	mesh.height = 1.0
 	node.mesh = mesh
-	node.material_override = material(color)
+	node.material_override = material(color, glow)
 	parent.add_child(node)
 	node.position = pos
 	node.scale = size
@@ -61,13 +61,19 @@ static func ring(parent: Node3D, radius: float, color: Color) -> MeshInstance3D:
 	node.position.y = 0.06
 	return node
 
-static func text3d(parent: Node3D, caption: String, pos: Vector3, color: Color, font_size: int = 40) -> Label3D:
+static func text3d(parent: Node3D, caption: String, pos: Vector3, color: Color, font_size: int = 40, is_billboard: bool = true) -> Label3D:
 	var label = Label3D.new()
 	label.text = caption
 	label.font_size = font_size
-	label.pixel_size = 0.012
+	label.pixel_size = 0.009
 	label.modulate = color
-	label.outline_size = 5
+	label.outline_size = 6
+	label.outline_modulate = Color(0.04, 0.07, 0.10, 0.95)
+	if is_billboard:
+		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		label.no_depth_test = true
+		label.render_priority = 10
+	label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	parent.add_child(label)
 	label.position = pos
 	return label

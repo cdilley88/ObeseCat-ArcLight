@@ -36,6 +36,13 @@ if ($Test) {
     & $Godot --headless --path $projectRoot --script res://tests/test_arclight.gd
     if ($LASTEXITCODE -ne 0) { throw "ArcLight checks failed." }
     & $Godot --headless --path $projectRoot --script res://tests/test_draconic.gd
+    if ($LASTEXITCODE -ne 0) { throw "Draconic checks failed." }
+    & $Godot --headless --path $projectRoot --script res://tests/test_save.gd
+    if ($LASTEXITCODE -ne 0) { throw "Save system checks failed." }
+    & $Godot --headless --path $projectRoot --script res://tests/test_title.gd
+    if ($LASTEXITCODE -ne 0) { throw "Title and opening checks failed." }
+    & $Godot --headless --path $projectRoot --script res://tests/test_skills.gd
+    if ($LASTEXITCODE -ne 0) { throw "Skills and controls checks failed." }
 } elseif ($Editor) {
     & $Godot --path $projectRoot --editor
 } else {

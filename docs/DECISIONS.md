@@ -133,3 +133,25 @@ User approved title, 19-floor area ranges, sentry assortment, Unique rarity, exa
 
 ## 2026-09-19 / 0.14 affinity equipment
 Accepted: Draconic and Visceral listed bases, existing random modifiers, affinity-favored enemy loot, neutral chests, elemental attack colors, only a white Cybernetic melee starter. See AFFINITY_ITEMS.md. 85% matching weight, base combat numbers, non-flying wings and cone damage rules are temporary prototype choices.
+
+## 2026-10-20 — Tech Demo 0.15: persistent disk saves
+Accepted user direction: Add persistent saves for playtesting instead of restarting from the beginning every launch.
+Implementation: SaveManager (`save_manager.gd`) serializes full game state to JSON at `user://arclight_save.json`.
+- Character: level, xp, points, attributes, hp, mana, potions, Silicon.
+- Gear: full backpack items (with Vector2i grid_pos), equipped item slots (preserves two-handed dual references and worn identity).
+- Meta & World: run seed, run number, keycards, visited areas, act completion, Dispatch ChefBot quest, shops, buyback, hub ground drops, wormhole, and per-visited-floor zone snapshots (enemy corpses/positions/hp, floor drops, chest states).
+- UX: Intro screen displays saved character summary with `CONTINUE GAME [ENTER]` and `START NEW GAME`. System menu (`Esc`) provides explicit `SAVE GAME` and `LOAD GAME` buttons. Auto-saves occur on entering Garage Refuge, floor transitions, new sorties, point spending, trades, and window close.
+- Reset: Confirmed reset in System menu wipes the disk save.
+
+## 2026-10-21 — Tech Demo 0.15: Developer Splash FMV & Dedicated ArcLight Title Screen
+Accepted user direction: Build a proper PS1-era opening sequence and title screen ("IntegralTec Studios Presents", old developer FMV sequence like Take-Two/989 Studios/Westwood, and a proper ObeseCat ArcLight title screen with New Game, Continue, Options, Credits, etc.). User authored original assets:
+- `ITS Presents Arclight.mp4`: Short developer video exported from Adobe Premiere Pro CS6.
+- `Arclight Logo.png`: Original high-res vector insignia.
+Implementation details:
+- Transcoded MP4 master to native Godot 4 `res://assets/video/its_presents_arclight.ogv` via FFmpeg (Theora video + Vorbis audio), compressed from 5.8 MB to 1.28 MB with zero stutter.
+- Created `prototype/scripts/title_screen.gd` managing the dual-layer transition:
+  1. Opening Developer Splash: Fullscreen `VideoStreamPlayer` with instant PS1-era skip on any keypress (`Space`, `Enter`, `Esc`) or mouse click. Fast-bypassed in headless mode for CI/test suite performance.
+  2. Main Title Menu: Showcases user's `arclight_logo.png` over a live 3D Garage Refuge camera view with gentle ambient drift and CRT scanlines.
+  3. Action Matrix: `CONTINUE SORTIE` (with live dossier badge of saved level/silicon/area), `NEW SORTIE` (with overwrite guard modal), `SYSTEM OPTIONS` (CRT/Audio toggles, seed control, replay FMV), `MISSION INTEL & CREDITS` (dossier), and `QUIT TO DESKTOP`.
+  4. In-Game Return: System Menu (`Esc`) adds `SAVE & RETURN TO TITLE` with auto-save before returning to title screen.
+- 5,386 automated test assertions pass with 0 failures (`test_title.gd` adds 43 assertions). Both Windows (`ObeseCat-ArcLight-0.15.exe`) and Web targets built and verified.

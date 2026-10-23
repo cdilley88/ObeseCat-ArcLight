@@ -1,15 +1,28 @@
 > Current 0.13 additions and superseding route/Unique rules: [ObeseCat ArcLight](ARCLIGHT_ACT1.md).
 
-# Playtest — Tech Demo 0.9
+# Playtest — Tech Demo 0.16
 
-Run `builds/windows/CorruptionLab-0.9.exe`, or `./run.ps1`. Enter begins in Garage Refuge. Click contacts to walk over, or approach and press E. Use STAIRS / LOBBY to enter Act I. No disk saves: closing the game loses the current character.
+Run `builds/windows/ObeseCat-ArcLight-0.15.exe`, or `./run.ps1`.
+- **Opening Developer Splash:** Authentic 90s-era "IntegralTec Studios Presents" FMV intro. Press any key (`Space`, `Enter`, `Escape`) or mouse click anywhere to skip directly to the Title Screen.
+- **ArcLight Title Screen:** Displays the original high-resolution ArcLight hero insignia over a live 3D garage diorama. Select **CONTINUE GAME** or **NEW GAME**. Use **OPTIONS** for CRT/Audio toggles, seed adjustments, save file management/deletion, or the new **CUSTOMIZE KEYBOARD CONTROLS** modal.
+- **Diablo-Style Combat Rhythm:**
+  - **Left-Click:** Move or physical attack with equipped weapon.
+  - **Right-Click:** Cast your currently assigned active skill at mouse target.
+  - **Hotbar Evolution:** Symmetrical Left-Click Weapon Slot (`L-CLK`) and Right-Click Skill Slot (`R-CLK`) flank the bottom console. Live cooldowns, active color borders, and tooltips are displayed. Clicking them opens Inventory (`[I]`) and Skill Matrix (`[K]`).
+- **Skill Matrix & Progression (`[K]`):**
+  - Earn **1 Skill Point per Level Up**.
+  - Spend points to unlock or rank up 4 core archetypes: **Directed Projectile** (Tier 1), **Point-Blank Nova** (Tier 2), **Ground Hazard** (Tier 3), and **Tactical Overdrive** (Tier 4).
+  - Assign any unlocked spell to Right-Click via `[ ASSIGN TO R-CLICK ]`.
+  - **Affinity Synergy & Resonance:** Your equipped gear dictates spell element and behavior (Plasma/Shock for Cybernetic, Acid/Tendrils for Visceral, Fire/Breath for Draconic). Equipping 4+ matching affinity pieces triggers **Affinity Resonance** (+25% damage, -20% mana cost, bonus procs).
+- **Keyboard Customization:** Remap any of the 14 actions in the in-game System Menu (`Esc` → `CUSTOMIZE KEYBOARD CONTROLS...`) or from Title Screen Options. Settings persist to `user://settings.json`.
+- **Persistent Saves:** Auto-saves upon floor transitions, garage visits, point allocations, or quitting. Manual Save/Load in System menu (`Esc`).
 
 - Click / WASD: move. Click an enemy: approach to weapon range and attack. Hold Space: attack nearby targets. Wheel: zoom.
 - I / Tab: paused inventory. Hover bag/worn parts for item cards. Fitting-bay arrows rotate your live equipment preview. Drag items to rearrange or equip; right-click/double-click equips or unequips. Drag light weapons onto LEFT or RIGHT. Heavy weapons occupy both.
 - C: character attributes and resistances. Five spendable points per level.
 - Q: arm/cancel next-hit empowerment, costing 10 Mana on a connected hit. Z: Life potion. X: Mana potion. Each stack caps at 99; vendors sell refills.
 - E: interact with a nearby contact or collect salvage. Click salvage: collect. Full backpack leaves salvage on the ground. AUTO-PACK can resolve fragmentation; DROP SELECTED leaves the item recoverable.
-- V: tower route. Physical elevators enable travel to unlocked stops. T: recover to garage after defeat. Esc/System: confirmed character/tower reset. Esc: pause/close panels. F: reduced effects. M: sound.
+- V: tower route. Physical elevators enable travel to unlocked stops. T: recover to garage after defeat. Esc/System: manual save/load and confirmed character/disk-save reset. Esc: pause/close panels. F: reduced effects. M: sound.
 
 ## Try rarity, containers and elements (0.9)
 

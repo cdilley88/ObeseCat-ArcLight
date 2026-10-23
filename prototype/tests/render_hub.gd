@@ -90,8 +90,8 @@ func run():
 	await click_at(menu.buy_button.get_global_rect().get_center())
 	check(game.silicon == money and game.Backpack.index_of(game.inventory,item) >= 0,"GUI buyback restores exact item")
 	game.close_contact()
-	await walk_to(game,"debug")
-	check(game.menu_open == "debug","debug contact opens through navigation")
+	game.open_debug()
+	check(game.menu_open == "debug","debug contact opens from system tools")
 	menu.debug_fields.level.value = 5
 	menu.debug_fields.silicon.value = 750
 	menu.debug_fields.strength.value = 25
@@ -105,7 +105,7 @@ func run():
 	await click_at(menu.buy_button.get_global_rect().get_center())
 	check(game.Backpack.index_of(game.inventory,purchased) >= 0 and game.silicon < 750,"armor vendor GUI purchase")
 	game.close_contact()
-	for role in ["cosmetics","broker","dispatch"]:
+	for role in ["broker","dispatch"]:
 		await walk_to(game,role)
 		check(game.menu_open == role,"future-role contact reachable: "+role)
 		game.close_contact()

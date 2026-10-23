@@ -166,7 +166,7 @@ static func build(game, id: String):
 			elif z.theme == "gardens":
 				Models.sphere(root,point,Vector3(2,2,2),Color("6b9d69"))
 			else: Models.box(root,point,Vector3(0.7,2.8,0.7),Color("869269"))
-	var sign = Models.text3d(root,z.name.to_upper(),Vector3(0,0.1,rect.end.y-7),tint,38)
+	var sign = Models.text3d(root,z.name.to_upper(),Vector3(0,0.1,rect.end.y-7),tint,38,false)
 	sign.rotation_degrees.x = -90
 	# Arrival is south. Forward exit is north; branch is east.
 	exit_gate(game,Vector3(-4,0,rect.end.y-2.5),z.prev,"BACK / "+("GARAGE" if z.prev == "hub" else ZONES[z.prev].name))

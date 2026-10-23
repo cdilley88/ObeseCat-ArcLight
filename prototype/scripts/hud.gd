@@ -1,6 +1,7 @@
 extends CanvasLayer
 
 const Loot = preload("res://scripts/loot.gd")
+const Skills = preload("res://scripts/skills.gd")
 var game
 var hub_menu
 var root: Control
@@ -38,9 +39,21 @@ var equipped_text: Label
 var socket_row: HBoxContainer
 var equip_button: Button
 var intro: PanelContainer
+var title_screen
+var bottom_bar: PanelContainer
+var weapon_slot_button: Button
+var skill_slot_button: Button
+var skills_panel: PanelContainer
+var skills_points_label: Label
+var skills_matrix_label: Label
+var skills_resonance_label: Label
+var skills_vbox: VBoxContainer
 var selection: int = 0
 var fx_button: Button
 var sound_button: Button
+var resolution_button: Button
+var msaa_button: Button
+var display_button: Button
 var scan: ColorRect
 var menu_buttons: Dictionary = {}
 var potion_buttons: Dictionary = {}
@@ -121,9 +134,51 @@ func _ready():
 		count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		root.add_child(count)
 		potion_counts[kind] = count
-	var bottom = panel(Vector2(320,682),Vector2(640,102))
+	weapon_slot_button = button("", func(): game.toggle_inventory())
+	weapon_slot_button.custom_minimum_size = Vector2(74, 56)
+	weapon_slot_button.position = Vector2(230, 700)
+	root.add_child(weapon_slot_button)
+	
+	var weapon_badge = label("L-CLK", 10, Color("f4da9b"))
+	weapon_badge.name = "Badge"
+	weapon_badge.position = Vector2(34, 38)
+	weapon_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	weapon_slot_button.add_child(weapon_badge)
+
+	var weapon_icon = TextureRect.new()
+	weapon_icon.name = "Icon"
+	weapon_icon.texture = load("res://assets/ui/character.svg")
+	weapon_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	weapon_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	weapon_icon.position = Vector2(8, 4)
+	weapon_icon.size = Vector2(38, 38)
+	weapon_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	weapon_slot_button.add_child(weapon_icon)
+
+	skill_slot_button = button("", func(): game.toggle_skills())
+	skill_slot_button.custom_minimum_size = Vector2(74, 56)
+	skill_slot_button.position = Vector2(976, 700)
+	root.add_child(skill_slot_button)
+
+	var skill_badge = label("R-CLK", 10, Color("f4da9b"))
+	skill_badge.name = "Badge"
+	skill_badge.position = Vector2(34, 38)
+	skill_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	skill_slot_button.add_child(skill_badge)
+
+	var skill_icon = TextureRect.new()
+	skill_icon.name = "Icon"
+	skill_icon.texture = load("res://assets/ui/skills.svg") if ResourceLoader.exists("res://assets/ui/skills.svg") else load("res://assets/ui/wormhole.svg")
+	skill_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	skill_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	skill_icon.position = Vector2(8, 4)
+	skill_icon.size = Vector2(38, 38)
+	skill_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	skill_slot_button.add_child(skill_icon)
+
+	bottom_bar = panel(Vector2(314,682),Vector2(652,102))
 	var bv = VBoxContainer.new()
-	bottom.add_child(bv)
+	bottom_bar.add_child(bv)
 	var br = HBoxContainer.new()
 	bv.add_child(br)
 	level_text = label("",13,Color("f2cf80"))
@@ -142,26 +197,28 @@ func _ready():
 	xp_bar.add_theme_stylebox_override("background",xp_bg)
 	br.add_child(xp_bar)
 	var menus = HBoxContainer.new()
-	menus.add_theme_constant_override("separation",8)
+	menus.add_theme_constant_override("separation",6)
 	bv.add_child(menus)
 	# Add future menu entries here; icon creation and key badges are shared.
 	var entries = [
-		["character","C","Character",func(): game.toggle_character()],
-		["inventory","I","Inventory",func(): game.toggle_inventory()],
-		["map","V","Tower map",func(): game.open_tower_map()],
-		["wormhole","B","Wormhole: open / return",func(): game.cast_wormhole()],
-		["system","Esc","Pause / System",func(): game.open_system()]]
+		["character",game.get_key_name("character"),"Character",func(): game.toggle_character()],
+		["inventory",game.get_key_name("inventory"),"Inventory",func(): game.toggle_inventory()],
+		["skills",game.get_key_name("skills"),"Skill Matrix & Spells",func(): game.toggle_skills()],
+		["map",game.get_key_name("map"),"Tower map",func(): game.open_tower_map()],
+		["wormhole",game.get_key_name("wormhole"),"Wormhole: open / return",func(): game.cast_wormhole()],
+		["system",game.get_key_name("system"),"Pause / System",func(): game.open_system()]]
 	for entry in entries:
 		var control = icon_button(entry[0],entry[1],entry[2],entry[3])
 		menus.add_child(control)
 		menu_buttons[entry[0]] = control
 	character_button = menu_buttons.character
 	circuit = label("",12,Color("82e4d6"))
-	circuit.custom_minimum_size.x = 235
+	circuit.custom_minimum_size.x = 220
 	menus.add_child(circuit)
 	build_inventory()
 	build_character()
-	build_intro()
+	build_skills()
+	build_title_screen()
 	hub_menu = preload("res://scripts/hub_menu.gd").new()
 	root.add_child(hub_menu)
 	hub_menu.setup(game)
@@ -175,20 +232,35 @@ func _ready():
 	# The overlay stays below readable controls.
 	root.move_child(scan, 0)
 
+func update_key_badges():
+	if not game: return
+	if potion_buttons.has("life"):
+		var b = potion_buttons.life.get_node_or_null("Badge")
+		if b: b.text = game.get_key_name("potion_life")
+	if potion_buttons.has("mana"):
+		var b = potion_buttons.mana.get_node_or_null("Badge")
+		if b: b.text = game.get_key_name("potion_mana")
+	for id in ["character", "inventory", "skills", "map", "wormhole", "system"]:
+		if menu_buttons.has(id):
+			var b = menu_buttons[id].get_node_or_null("Badge")
+			if b: b.text = game.get_key_name(id)
+
 func icon_button(asset: String, key: String, caption: String, action: Callable) -> Button:
 	var control = button("",action)
-	control.custom_minimum_size = Vector2(60,54)
+	control.custom_minimum_size = Vector2(56,54)
 	control.tooltip_text = caption+" ["+key+"]"
 	var icon = TextureRect.new()
-	icon.texture = load("res://assets/ui/"+asset+".svg")
+	if ResourceLoader.exists("res://assets/ui/"+asset+".svg"):
+		icon.texture = load("res://assets/ui/"+asset+".svg")
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.position = Vector2(10,2)
+	icon.position = Vector2(8,2)
 	icon.size = Vector2(40,40)
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	control.add_child(icon)
 	var badge = label(key,11,Color("f4da9b"))
-	badge.position = Vector2(36 if key != "Esc" else 29,37)
+	badge.name = "Badge"
+	badge.position = Vector2(34 if key != "Esc" else 26,37)
 	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	control.add_child(badge)
 	return control
@@ -327,6 +399,123 @@ func refresh_character():
 
 
 
+func build_skills():
+	skills_panel = panel(Vector2(530, 96), Vector2(560, 574))
+	skills_panel.visible = false
+	var v = VBoxContainer.new()
+	v.add_theme_constant_override("separation", 8)
+	skills_panel.add_child(v)
+	
+	var header = HBoxContainer.new()
+	header.add_theme_constant_override("separation", 12)
+	v.add_child(header)
+	var title = label("SKILL MATRIX & SPELLBOOK", 18, Color("e5c678"))
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(title)
+	
+	var close_btn = button("CLOSE [K]", func(): game.toggle_skills())
+	header.add_child(close_btn)
+	
+	skills_matrix_label = label("EQUIPPED MATRIX AFFINITY: CYBERNETIC", 13, Color("76d7ea"))
+	v.add_child(skills_matrix_label)
+	
+	skills_resonance_label = label("AFFINITY RESONANCE: INACTIVE (Need 4+ matching items)", 12, Color("7a8f93"))
+	v.add_child(skills_resonance_label)
+	
+	skills_points_label = label("UNSPENT SKILL POINTS: 0 (+1 per level up)", 14, Color("f4da9b"))
+	v.add_child(skills_points_label)
+	
+	var sep = HSeparator.new()
+	v.add_child(sep)
+	
+	var scroll = ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(536, 420)
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	v.add_child(scroll)
+	
+	skills_vbox = VBoxContainer.new()
+	skills_vbox.add_theme_constant_override("separation", 8)
+	skills_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(skills_vbox)
+
+func refresh_skills():
+	if not game or not is_instance_valid(skills_panel): return
+	var aff = Skills.get_matrix_affinity(game.equipment)
+	var resonance = Skills.has_resonance(game.equipment)
+	var count = Skills.count_matching_affinity(game.equipment, aff)
+	
+	var aff_color = Color("76d7ea") if aff == "Cybernetic" else (Color("9ee62b") if aff == "Visceral" else Color("ff7a2b"))
+	skills_matrix_label.text = "EQUIPPED MATRIX AFFINITY: %s" % aff.to_upper()
+	skills_matrix_label.add_theme_color_override("font_color", aff_color)
+	
+	if resonance:
+		skills_resonance_label.text = "★ AFFINITY RESONANCE: ACTIVE (+25%% Damage, -20%% Mana Cost, %d/4 pieces)" % count
+		skills_resonance_label.add_theme_color_override("font_color", Color("90f5b8"))
+	else:
+		skills_resonance_label.text = "AFFINITY RESONANCE: INACTIVE (Equip 4+ %s pieces · Currently %d/4)" % [aff, count]
+		skills_resonance_label.add_theme_color_override("font_color", Color("829699"))
+		
+	skills_points_label.text = "UNSPENT SKILL POINTS: %d  (+1 earned every level up)" % game.progression.skill_points
+	skills_points_label.add_theme_color_override("font_color", Color("f4da9b") if game.progression.skill_points > 0 else Color("809299"))
+	
+	for child in skills_vbox.get_children():
+		child.queue_free()
+		
+	for s_id in Skills.LIST:
+		var rank = game.skills.get(s_id, 0)
+		var s_data = Skills.get_skill_data(s_id, game.equipment, maxi(1, rank))
+		var card = PanelContainer.new()
+		card.custom_minimum_size = Vector2(520, 94)
+		var c_style = StyleBoxFlat.new()
+		c_style.bg_color = Color("101d25f5")
+		c_style.border_color = Color("436365")
+		c_style.set_border_width_all(1)
+		c_style.content_margin_left = 16
+		c_style.content_margin_right = 16
+		c_style.content_margin_top = 10
+		c_style.content_margin_bottom = 10
+		card.add_theme_stylebox_override("panel", c_style)
+		skills_vbox.add_child(card)
+		
+		var cv = VBoxContainer.new()
+		cv.add_theme_constant_override("separation", 3)
+		card.add_child(cv)
+		
+		var top_row = HBoxContainer.new()
+		top_row.add_theme_constant_override("separation", 8)
+		cv.add_child(top_row)
+		
+		var name_lbl = label(s_data.name + (" [Rank %d/5]" % rank if rank > 0 else " [Unlearned]"), 14, s_data.color)
+		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		top_row.add_child(name_lbl)
+		
+		var is_assigned = (game.assigned_skill == s_id and rank > 0)
+		if is_assigned:
+			var active_badge = label("★ ACTIVE (R-CLICK)", 12, Color("f4da9b"))
+			top_row.add_child(active_badge)
+		else:
+			var assign_btn = button("ASSIGN TO R-CLICK", func(sid = s_id): game.assign_skill(sid))
+			assign_btn.disabled = (rank <= 0)
+			assign_btn.custom_minimum_size = Vector2(130, 24)
+			top_row.add_child(assign_btn)
+			
+		var up_btn = button("+ UPGRADE", func(sid = s_id): game.upgrade_skill(sid))
+		up_btn.disabled = (game.progression.skill_points <= 0 or rank >= 5 or game.progression.level < s_data.req_level)
+		up_btn.custom_minimum_size = Vector2(88, 24)
+		top_row.add_child(up_btn)
+		
+		var sub_text = "%s Element · Mana: %d · Cooldown: %.1fs" % [s_data.element.capitalize(), int(s_data.mana_cost), s_data.cooldown]
+		if s_data.base_damage > 0:
+			sub_text += " · Base Damage: %d" % int(s_data.base_damage)
+		if game.progression.level < s_data.req_level:
+			sub_text += " · (Requires Level %d)" % s_data.req_level
+		cv.add_child(label(sub_text, 11, Color("b2c5c9")))
+		
+		cv.add_child(label(s_data.desc, 11, Color("e0e9ea")))
+		
+		var res_lbl = label("Resonance Perk: " + s_data.resonance_bonus, 11, Color("9ae8b6") if resonance else Color("6e8082"))
+		cv.add_child(res_lbl)
+
 func build_inventory():
 	inventory_panel = panel(Vector2(475, 91), Vector2(787, 578))
 	inventory_panel.visible = false
@@ -395,16 +584,16 @@ func build_inventory():
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	right.add_child(help)
 
-func build_intro():
-	intro = panel(Vector2(350, 180), Vector2(580, 420))
-	var v = VBoxContainer.new()
-	v.add_theme_constant_override("separation", 15)
-	intro.add_child(v)
-	v.add_child(label("GARAGE REFUGE / ACT I", 27, Color("89ecd2")))
-	var l = label("ObeseCat ArcLight / an ObeseCat universe game.\n\nClimb 18 floors across six areas, then confront ObeseCat.\nEach area has three randomized floors. Supervisors hold access.\nEach area has fixed security and loot tiers.\nEarly floors stay weak when you return stronger.\n\nTake the Lobby stairs. Press V for the tower route.\nUse an elevator to revisit authorized stops.\nGarage vendors trade Silicon. DEV controls remain available.\nProgress and floor state are session-only.",16)
-	v.add_child(l)
-	v.add_child(button("ENTER GARAGE [ENTER]", func(): game.begin()))
-	v.add_child(label("Prototype layouts, combat numbers and visuals remain open to playtest feedback.", 12, Color("8eafb5")))
+func build_title_screen():
+	title_screen = preload("res://scripts/title_screen.gd").new()
+	title_screen.setup(game, self)
+	root.add_child(title_screen)
+	intro = title_screen.main_card
+
+func show_title():
+	if is_instance_valid(title_screen):
+		title_screen.show_menu()
+	update_hud()
 
 func select_item(index: int):
 	selection = index
@@ -526,13 +715,66 @@ func update_hud():
 	if game.hp <= 0: objective.text += "\nDEFEATED / T: recover"
 	elif game.act_complete: objective.text += "  /  ACT I COMPLETE"
 
+	var in_game = game.started
+	life_orb.visible = in_game
+	mana_orb.visible = in_game
+	if is_instance_valid(bottom_bar): bottom_bar.visible = in_game
+	objective.visible = in_game
+	notice.visible = in_game and game.message_time > 0
 	notice.text = game.message if game.message_time > 0 else ""
-	hub_menu.visible = game.menu_open != ""
-	intro.visible = not game.started
-	inventory_panel.visible = game.inventory_open
-	character_panel.visible = game.character_open
-	if game.character_open: refresh_character()
-	if is_instance_valid(fx_button): fx_button.text = "CRT: ON [F]" if game.effects_enabled else "FX: LOW [F]"
-	if is_instance_valid(sound_button): sound_button.text = "SOUND: ON [M]" if game.sound_enabled else "SOUND: OFF [M]"
+	for kind in potion_buttons:
+		potion_buttons[kind].visible = in_game
+		potion_counts[kind].visible = in_game
+	if is_instance_valid(title_screen):
+		title_screen.visible = not in_game
+		if not in_game:
+			title_screen.refresh_save_status()
+	intro.visible = not in_game
+	hub_menu.visible = in_game and game.menu_open != ""
+	inventory_panel.visible = in_game and game.inventory_open
+	character_panel.visible = in_game and game.character_open
+	if is_instance_valid(skills_panel):
+		skills_panel.visible = in_game and game.skills_open
+		if in_game and game.skills_open: refresh_skills()
+	if in_game and game.character_open: refresh_character()
+	
+	if is_instance_valid(weapon_slot_button):
+		weapon_slot_button.visible = in_game
+		if in_game:
+			var w = game.selected_weapon()
+			var w_color = Loot.TYPES.get(w.get("type", "physical"), Color("829699"))
+			weapon_slot_button.tooltip_text = "WEAPON: %s\nDamage: %d  Reach: %.1fm  Type: %s\n[Click / I: Inventory]" % [
+				w.name, int(w.damage), float(w.reach), str(w.type).capitalize()
+			]
+			var sb = StyleBoxFlat.new()
+			sb.bg_color = Color("151f28")
+			sb.border_color = w_color
+			sb.set_border_width_all(2)
+			weapon_slot_button.add_theme_stylebox_override("normal", sb)
+
+	if is_instance_valid(skill_slot_button):
+		skill_slot_button.visible = in_game
+		if in_game:
+			var s_rank = game.skills.get(game.assigned_skill, 0)
+			var s_data = Skills.get_skill_data(game.assigned_skill, game.equipment, maxi(1, s_rank))
+			var cd = game.skill_cooldowns.get(game.assigned_skill, 0.0)
+			var s_color = s_data.get("color", Color("829699"))
+			if cd > 0:
+				skill_slot_button.tooltip_text = "SKILL: %s (Cooldown: %.1fs)\n[Click / K: Skills]" % [s_data.name, cd]
+			else:
+				skill_slot_button.tooltip_text = "SKILL: %s [Rank %d/5]\nMana Cost: %d  Element: %s\n[Click / K: Skills]" % [
+					s_data.name, s_rank, int(s_data.get("mana_cost", 0)), str(s_data.get("element", "")).capitalize()
+				]
+			var s_sb = StyleBoxFlat.new()
+			s_sb.bg_color = Color("1a1824") if cd <= 0 else Color("0d0d12")
+			s_sb.border_color = s_color if cd <= 0 else Color("40484e")
+			s_sb.set_border_width_all(2)
+			skill_slot_button.add_theme_stylebox_override("normal", s_sb)
+			
+	if is_instance_valid(fx_button): fx_button.text = "CRT SCANLINES: ON [F]" if game.effects_enabled else "CRT SCANLINES: OFF [F]"
+	if is_instance_valid(sound_button): sound_button.text = "AUDIO SFX: ON [M]" if game.sound_enabled else "AUDIO SFX: OFF [M]"
+	if is_instance_valid(resolution_button): resolution_button.text = "SCALE: CRISP 1280x800" if game.crisp_graphics else "SCALE: RETRO 640x400"
+	if is_instance_valid(msaa_button): msaa_button.text = "MSAA 3D: " + game.msaa_name()
+	if is_instance_valid(display_button): display_button.text = "DISPLAY: FULLSCREEN [F11]" if game.is_fullscreen() else "DISPLAY: WINDOWED [F11]"
 	scan.material.set_shader_parameter("enabled", game.effects_enabled)
 
